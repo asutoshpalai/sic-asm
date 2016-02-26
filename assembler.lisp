@@ -2,14 +2,69 @@
 
 (in-package :in.asutoshpalai.sic)
 
+(defun concat-syms (&rest syms)
+    (intern (apply #'concatenate 'string (mapcar #'symbol-name syms))))
+
+(defun make-keyword (&rest names)
+  (values (intern (apply #'concatenate 'string (mapcar #'symbol-name names)) "KEYWORD")))
+
+(defun interleave (list1 list2)
+  (if (null list1)
+    list2
+    (cons (car list1) (interleave list2 (cdr list1)))))
+
+(defun create-tab-struct-entries (parts)
+  (loop for part in parts
+         collect
+       `(,(first part)
+          (error ,(concatenate 'string "Must supply the " (symbol-name (first part))))
+          :type ,(second part))))
+
+(defun create-tab-make-arguments (parts)
+  (loop for part in parts
+     append
+       `(,(make-keyword (first part)) ,(cond
+					((equal (first part) 'opcode)
+					 `(parse-integer ,(first part) :radix 16))
+					 ((equal (second part) 'integer)
+					  `(parse-integer ,(first part)))
+					 (t
+					  (first part))))))
+
+(defmacro create-tab (name filename parts)
+  (let ((st-name (concat-syms name '-entry))
+        (con-name (concat-syms '+ name '+))
+        (fstream (gensym))
+        (htab (gensym))
+        (line (gensym))
+        (part-names (mapcar 'first parts)))
+    `(progn
+      (defstruct ,st-name
+       ,@(create-tab-struct-entries parts))
+    (defconstant ,con-name
+                  (let ((,htab (make-hash-table :test 'equalp)))
+                    (with-open-file (,fstream ,filename)
+                      (loop for ,line = (read-line ,fstream nil)
+                            while ,line do
+                            (destructuring-bind ,part-names
+                              (split "[\\s\\t]+" ,line :omit-unmatched-p t)
+                              (setf (gethash ,(first (first parts)) ,htab)
+				    (,(concat-syms 'make- st-name)
+				      ,@(create-tab-make-arguments parts)
+                              )))))
+                    ,htab)))))
+
+(create-tab optab "optab.txt" ((mnemonic string) (number-of-operands integer) (opcode integer) (format string)))
+
+#+(or)
 (defstruct optab-entry
-  "Structure for storing the opcodes and other details like number of operands 
+  "Structure for storing the opcodes and other details like number of operands
   and format"
   (mnemonic (error "must supply the menemonic") :type string)
   (number-of-operands (error "must supply the number of operands") :type integer)
   (opcode (error "must supply the opcode") :type integer)
   (format (error "must supply the format") :type string))
-
+#+(or)
 (defconstant +optab+
   (let ((ht (make-hash-table :test 'equalp)))
     (with-open-file (infile "optab.txt")
@@ -36,7 +91,7 @@
 
 (defun is-mnemonic (st)
   "Checks if the symbol is present in +optab+. If present it returns the
-  optab-entry else nil" 
+  optab-entry else nil"
   (gethash st +optab+))
 
 (defun remove-comment (line)
