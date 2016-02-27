@@ -54,7 +54,11 @@
                               )))))
                     ,htab)))))
 
-(create-tab optab "optab.txt" ((mnemonic string) (number-of-operands integer) (opcode integer) (format string)))
+(create-tab optab "optab.txt"
+	    ((mnemonic string) (number-of-operands integer) (opcode integer) (format string)))
+
+(create-tab dirtab "asmdir.txt"
+	    ((mnemonic string) (number-of-operands integer)))
 
 #+(or)
 (defstruct optab-entry
@@ -64,6 +68,7 @@
   (number-of-operands (error "must supply the number of operands") :type integer)
   (opcode (error "must supply the opcode") :type integer)
   (format (error "must supply the format") :type string))
+
 #+(or)
 (defconstant +optab+
   (let ((ht (make-hash-table :test 'equalp)))
@@ -86,13 +91,14 @@
   loc
   label
   mnemonic
+  (asm-dir nil :type boolean)
   operand
   mne-details)
 
 (defun is-mnemonic (st)
-  "Checks if the symbol is present in +optab+. If present it returns the
-  optab-entry else nil"
-  (gethash st +optab+))
+  "Checks if the symbol is present in +optab+ or in +dirtab+. If present it returns the
+  optab-entry else nil. The second return value is wether it was from +dirtab+."
+  (gethash st +dirtab+ (gethash st +optab+)))
 
 (defun remove-comment (line)
   "Removes the comment part of a single line"
@@ -105,12 +111,12 @@
 	 (size (length parts))
 	 (sline (make-source-line)))
     (cond
-      ((setf (source-line-mne-details  sline) (is-mnemonic (first parts)))
+      ((setf (values (source-line-mne-details  sline) (source-line-asm-dir  sline)) (is-mnemonic (first parts)))
 	(progn
 	  (setf (source-line-mnemonic sline) (first parts))
 	  (setf parts (rest parts))
 	  (setf size (- size 1))))
-      ((setf (source-line-mne-details  sline) (is-mnemonic (second parts)))
+      ((setf (values (source-line-mne-details  sline) (source-line-asm-dir  sline)) (is-mnemonic (second parts)))
        (progn
 	  (setf (source-line-label sline) (first parts))
 	  (setf (source-line-mnemonic sline) (second parts))
