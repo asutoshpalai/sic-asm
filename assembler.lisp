@@ -107,7 +107,7 @@
 (defun parse-line (line)
   "Takes a line from the source code and creates the source-line strucure.
   Comments in line should be removed beforehand"
-  (let* ((parts (split "[\\s\\t]+" line :omit-unmatched-p t))
+  (let* ((parts (all-matches-as-strings "[^\\s\\t]+" line))
 	 (size (length parts))
 	 (sline (make-source-line)))
     (cond

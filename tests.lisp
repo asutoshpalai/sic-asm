@@ -30,7 +30,21 @@
                              :label "EXIT"
                              :mnemonic "RSUB"
                              :mne-details (gethash "RSUB" +optab+)) 
-                           (parse-line "EXIT RSUB ")))
+                           (parse-line "EXIT RSUB "))
+            (assert-error 'error (parse-line "EXIT BLAH BLAH2"))
+            (assert-equalp (make-source-line
+                             :mnemonic "START"
+                             :operand '("1000")'
+                             :mne-details  (gethash "START" +dirtab+)
+                             :asm-dir t)
+                           (parse-line "   START 1000"))
+            (assert-equalp (make-source-line
+                             :label "EOF"
+                             :mnemonic "BYTE"
+                             :operand '("C'EOF'")'
+                             :mne-details  (gethash "BYTE" +dirtab+)
+                             :asm-dir t)
+                           (parse-line "EOF BYTE C'EOF'")))
 
 (setq *print-failures* t)
 (run-tests)
