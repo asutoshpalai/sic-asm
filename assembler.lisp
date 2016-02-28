@@ -111,12 +111,16 @@
 	 (size (length parts))
 	 (sline (make-source-line)))
     (cond
-      ((setf (values (source-line-mne-details  sline) (source-line-asm-dir  sline)) (is-mnemonic (first parts)))
+      ((setf
+	(values (source-line-mne-details  sline) (source-line-asm-dir  sline))
+	(is-mnemonic (first parts)))
 	(progn
 	  (setf (source-line-mnemonic sline) (first parts))
 	  (setf parts (rest parts))
 	  (setf size (- size 1))))
-      ((setf (values (source-line-mne-details  sline) (source-line-asm-dir  sline)) (is-mnemonic (second parts)))
+      ((setf
+	(values (source-line-mne-details  sline) (source-line-asm-dir  sline))
+	(is-mnemonic (second parts)))
        (progn
 	  (setf (source-line-label sline) (first parts))
 	  (setf (source-line-mnemonic sline) (second parts))
@@ -126,3 +130,67 @@
        (error (concatenate 'string "Source line is in wrong format: " line))))
     (setf (source-line-operand sline) parts)
     sline))
+
+(defun process-line (line)
+  (let ((line (remove-comment line)))
+        (if (> (length line) 0)
+          (parse-line line)
+          nil)))
+
+(defun int->bytelist (num)
+  (loop for x = num then (ash x -8) with res = nil
+     while  (> x 0) do
+       (push (ldb (byte 8 0) x) res)
+       finally (return res)))
+
+(defun literal->bytelist (literal)
+  (cond
+    ((char-equal #\C (char literal 0))
+     (map 'list 'char-code (scan-to-strings "(?<=[Cc]')(.*)(?=')" literal)))
+    ((char-equal #\X (char literal 0))
+     (int->bytelist (parse-integer (scan-to-strings "(?<=[Xx]')(.*)(?=')" literal) :radix 16)))
+    (t
+     (int->bytelist (parse-integer literal)))))
+    
+
+(defun pass1 (filename)
+  "Assigns locations to the symbols and returns the hash-table for location, starting address, length of program"
+  (with-open-file (file filename)
+    (let ((locctr 0)
+	  (start 0)
+	  (symtab (make-hash-table :test 'equalp)))
+      ;; check for start
+      (loop for line = (read-line file nil)
+	 if (process-line line) do
+	   (let ((sline (process-line line)))
+	     (if (equalp (source-line-mnemonic sline) "START")
+		 (setf locctr
+		       (setf start (parse-integer (first (source-line-operand sline)))))
+		 (file-position file 0))
+	     (return)))
+      (loop for line = (read-line file nil)
+	 while line do
+	   (let ((sline (process-line line)))
+	     (if sline
+		 (let ((label (source-line-label sline))
+		       (mnemonic (source-line-mnemonic sline)))
+		   (if label
+		       ;; entering label into symtab
+		       (If (gethash label symtab)
+			   (error (concatenate 'string "Redefination of symbol: " line))
+			   (setf (gethash label symtab) locctr)))
+		   (if (equalp mnemonic "END")
+		       (return)
+		       (setf locctr (+ locctr
+				   (cond
+				     ((not (source-line-asm-dir sline)) 3)
+				     ((equalp mnemonic "WORD") 3)
+				     ((equalp mnemonic "BYTE")
+				      (length (literal->bytelist (first (source-line-operand sline)))))
+				     ((equalp mnemonic "RESB")
+				      (parse-integer (first (source-line-operand sline))))
+				     ((equalp mnemonic "RESW")
+				      (* 3 (parse-integer (first (source-line-operand sline)))))
+				     (t
+				      (error (concatenate 'string "Assember directive not yet supported" mnemonic)))))))))))
+      (values symtab start (- locctr start)))))

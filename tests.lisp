@@ -44,7 +44,13 @@
                              :operand '("C'EOF'")'
                              :mne-details  (gethash "BYTE" +dirtab+)
                              :asm-dir t)
-                           (parse-line "EOF BYTE C'EOF'")))
+                           (parse-line "EOF BYTE C'EOF'"))
+            (assert-equal '(8 42) (int->bytelist 2090))
+            (assert-equal '(143 11 156) (int->bytelist 9374620))
+            (assert-equal '(66 97 100) (literal->bytelist "C'Bad'"))
+            (assert-equal '(69 185) (literal->bytelist "X'45B9'"))
+            (assert-equal '(252) (literal->bytelist "X'FC'"))
+            (assert-equal '(143 11 156) (literal->bytelist "9374620")))
 
 (setq *print-failures* t)
 (run-tests)
