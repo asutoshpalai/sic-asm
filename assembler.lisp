@@ -185,6 +185,7 @@
 		       (if (gethash label symtab)
 			   (error (concatenate 'string "Redefination of symbol: " line))
 			   (setf (gethash label symtab) locctr)))
+                   (format outfile "~S~%" sline)
 		   (if (equalp mnemonic "END")
 		       (return) ; from loop
                        (progn
@@ -204,7 +205,6 @@
                                  locctr #\Tab
                                  (source-line-label sline) #\Tab
                                  (source-line-mnemonic sline) #\Tab
-                                 (source-line-operand sline))
-                        (format outfile "~S~%" sline)))))))
+                                 (source-line-operand sline))))))))
         (values symtab start (- locctr start))))))
 
