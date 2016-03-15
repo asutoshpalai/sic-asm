@@ -132,10 +132,12 @@
     sline))
 
 (defun process-line (line)
-  (let ((line (remove-comment line)))
+  (if line
+      (let ((line (remove-comment line)))
         (if (> (length line) 0)
           (parse-line line)
-          nil)))
+          nil))
+      nil))
 
 (defun int->bytelist (num)
   (loop for x = num then (ash x -8) with res = nil
@@ -156,32 +158,37 @@
 (defun pass1 (filename)
   "Assigns locations to the symbols and returns the hash-table for location, starting address, length of program"
   (with-open-file (file filename)
-    (let ((locctr 0)
-	  (start 0)
-	  (symtab (make-hash-table :test 'equalp)))
-      ;; check for start
-      (loop for line = (read-line file nil)
-	 if (process-line line) do
-	   (let ((sline (process-line line)))
-	     (if (equalp (source-line-mnemonic sline) "START")
-		 (setf locctr
-		       (setf start (parse-integer (first (source-line-operand sline)))))
-		 (file-position file 0))
-	     (return)))
-      (loop for line = (read-line file nil)
-	 while line do
-	   (let ((sline (process-line line)))
-	     (if sline
+    (with-open-file(outfile (concatenate 'string filename ".imd") :direction :output :if-exists :supersede)
+      (let ((locctr 0)
+            (start 0)
+            (symtab (make-hash-table :test 'equalp)))
+        ;; check for start
+        (loop for sline = (process-line (read-line file nil))
+	 if sline do
+	     (progn
+               (if (equalp (source-line-mnemonic sline) "START")
+                   (progn
+                     (setf locctr
+                           (setf start (parse-integer (first (source-line-operand sline)) :radix 16)))
+                     (format outfile "~S~%" sline))
+                   (file-position file 0))
+               (return)))
+        (loop for line = (read-line file nil)
+           while line do
+             (let ((sline (process-line line)))
+               (if sline
 		 (let ((label (source-line-label sline))
 		       (mnemonic (source-line-mnemonic sline)))
-		   (if label
+                   (setf (source-line-loc sline) locctr)
+                   (if label
 		       ;; entering label into symtab
-		       (If (gethash label symtab)
+		       (if (gethash label symtab)
 			   (error (concatenate 'string "Redefination of symbol: " line))
 			   (setf (gethash label symtab) locctr)))
 		   (if (equalp mnemonic "END")
-		       (return)
-		       (setf locctr (+ locctr
+		       (return) ; from loop
+                       (progn
+                         (setf locctr (+ locctr
 				   (cond
 				     ((not (source-line-asm-dir sline)) 3)
 				     ((equalp mnemonic "WORD") 3)
@@ -192,5 +199,12 @@
 				     ((equalp mnemonic "RESW")
 				      (* 3 (parse-integer (first (source-line-operand sline)))))
 				     (t
-				      (error (concatenate 'string "Assember directive not yet supported" mnemonic)))))))))))
-      (values symtab start (- locctr start)))))
+				      (error (concatenate 'string "Assember directive not yet supported" mnemonic))))))
+                        #+(or) (format outfile "\"~4,'0X\"~C~S~C~S~C~S~%"
+                                 locctr #\Tab
+                                 (source-line-label sline) #\Tab
+                                 (source-line-mnemonic sline) #\Tab
+                                 (source-line-operand sline))
+                        (format outfile "~S~%" sline)))))))
+        (values symtab start (- locctr start))))))
+
